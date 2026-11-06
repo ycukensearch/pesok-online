@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Песок Онлайн — Браузерная песочница</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body {
+            margin: 0; min-height: 100vh; background: #0d1117;
+            display: flex; align-items: center; justify-content: center;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            padding: 8px; color: #c9d1d9; overflow: hidden;
+        }
+        .app {
+            background: #0a0e13; border-radius: 16px; padding: 10px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8), inset 0 0 0 1px #21262d;
+            max-width: 900px; width: 100%; display: flex; flex-direction: column;
+            max-height: 98vh;
+        }
+        .canvas-wrapper {
+            display: flex; justify-content: center; border-radius: 10px;
+            overflow: hidden; box-shadow: inset 0 0 0 2px #21262d;
+            background: #000; flex: 1 1 auto; min-height: 0;
+            position: relative;
+        }
+        canvas {
+            display: block; width: 100%; height: 100%;
+            object-fit: contain; cursor: crosshair; background: #0b0e12;
+            touch-action: none; image-rendering: pixelated;
+        }
+        .toolbar {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+            margin-top: 8px; padding: 4px 0;
+            max-height: 220px; overflow-y: auto; flex-shrink: 0;
+            scrollbar-width: thin; scrollbar-color: #30363d #161b22;
+        }
+        .toolbar::-webkit-scrollbar { width: 6px; }
+        .toolbar::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        .mat-btn {
+            background: #161b22; border: 1px solid #30363d;
+            padding: 4px 8px; border-radius: 20px;
+            font-weight: 600; font-size: 11px; color: #c9d1d9;
+            cursor: pointer; transition: 0.1s ease;
+            display: flex; align-items: center; gap: 4px;
+            white-space: nowrap;
+        }
+        .mat-btn:hover { background: #21262d; }
+        .mat-btn.active {
+            border-color: #58a6ff; background: #1c2a3a;
+            box-shadow: 0 0 0 2px rgba(88,166,255,0.25); color: #fff;
+        }
+        .mat-btn .color-dot {
+            width: 8px; height: 8px; border-radius: 3px;
+            display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+        }
+        .action-btn {
+            background: #1c2128; border: 1px solid #30363d;
+            padding: 4px 8px; border-radius: 20px;
+            font-weight: 600; font-size: 11px; color: #b8c4d4;
+            cursor: pointer; transition: 0.1s;
+        }
+        .action-btn:hover { background: #2a3340; color: #fff; }
+        .action-btn.danger { border-color: #6e2b2b; color: #ff9b9b; }
+        .brush-group {
+            display: flex; align-items: center; gap: 4px;
+            margin-left: auto; background: #161b22; padding: 3px 6px;
+            border-radius: 20px; border: 1px solid #30363d;
+        }
+        .brush-group label { color: #8b949e; font-size: 10px; font-weight: 500; }
+        input[type="range"] { width: 70px; accent-color: #58a6ff; }
+        .brush-value { color: #b8c9e0; font-weight: 600; font-size: 10px; min-width: 16px; text-align: center; }
+        .hint { color: #484f58; font-size: 10px; margin-left: auto; }
+        .section-label {
+            width: 100%; color: #58a6ff; font-size: 10px;
+            text-transform: uppercase; letter-spacing: 1px;
+            margin: 4px 0 1px; font-weight: 700;
+        }
+        @media (max-width: 600px) {
+            .app { padding: 6px; border-radius: 12px; }
+            .mat-btn { font-size: 10px; padding: 3px 6px; }
+            .action-btn { font-size: 10px; padding: 3px 6px; }
+            .brush-group { margin-left: 0; }
+            .hint { display: none; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="canvas-wrapper">
+        <canvas id="world" width="400" height="300"></canvas>
+    </div>
+    <div class="toolbar" id="toolbar"></div>
+</div>
+
+<script>
+(function(){
+    // ============================================================
+    //  МАТЕРИАЛЫ
+    // ============================================================
+    const M = {
+        EMPTY: 0, SAND: 1, WATER: 2, OIL: 3, FIRE: 4, SMOKE: 5, STONE: 6, ACID: 7, STEAM: 8, WALL: 9,
+        LAVA: 10, ICE: 11, SNOW: 12, GUNPOWDER: 13, METAL: 14, WOOD: 15, PLANT: 16, SEED: 17,
+        CLAY: 18, GLASS: 19, MERCURY: 20, HYDROGEN: 21, OXYGEN: 22, EXPLOSIVE: 23, TNT: 24,
+        ASH: 25, SALT: 26, SUGAR: 27, ALCOHOL: 28, URANIUM: 29, NAPALM: 30,
+        BONE: 31, MEAT: 32, BLOOD: 33, MILK: 34, HONEY: 35, WAX: 36, RESIN: 37,
+        SULFUR: 38, SALTPETER: 39, TITANIUM: 40, GOLD: 41, DIAMOND: 42, OBSIDIAN: 43,
+        BASALT: 44, MOSS: 45, VINE: 46, MUSHROOM: 47, ALGAE: 48, PLANKTON: 49, CORAL: 50,
+        PEARL: 51, MAGNET: 52, BATTERY: 53, WIRE: 54, LAMP: 55, FIBERGLASS: 56,
+        CONCRETE: 57, BRICK: 58, ASPHALT: 59, RUBBER: 60, PLASTIC: 61, TEFLON: 62,
+        NEON: 63, HELIUM: 64, ARGON: 65, CHLORINE: 66, FLUORINE: 67, AMMONIA: 68,
+        METHANE: 69, PROPANE: 70, ACETYLENE: 71, PEROXIDE: 72, IODINE: 73,
+        // Многоклеточные существа — специальные типы
+        HUMAN: 80, DINO: 81, ANT: 82, SPIDER: 83, CAT: 84, DOG: 85,
+        STARFISH: 86, SPONGE: 87, OCTOPUS: 88,
+        CORPSE: 90,
+    };
+
+    const C = {
+        [M.EMPTY]: [11,14,18], [M.SAND]: [222,184,104], [M.WATER]: [50,130,220], [M.OIL]: [90,70,40],
+        [M.FIRE]: [255,140,30], [M.SMOKE]: [70,70,75], [M.STONE]: [130,130,140], [M.ACID]: [120,255,80],
+        [M.STEAM]: [200,200,220], [M.WALL]: [100,100,120], [M.LAVA]: [255,90,20], [M.ICE]: [160,220,255],
+        [M.SNOW]: [240,245,255], [M.GUNPOWDER]: [60,60,65], [M.METAL]: [170,175,190], [M.WOOD]: [140,95,50],
+        [M.PLANT]: [50,180,60], [M.SEED]: [200,180,90], [M.CLAY]: [180,120,80], [M.GLASS]: [200,230,240],
+        [M.MERCURY]: [190,190,205], [M.HYDROGEN]: [180,220,255], [M.OXYGEN]: [120,200,255],
+        [M.EXPLOSIVE]: [200,50,50], [M.TNT]: [220,60,40], [M.ASH]: [80,75,70], [M.SALT]: [240,240,245],
+        [M.SUGAR]: [245,245,250], [M.ALCOHOL]: [180,210,240], [M.URANIUM]: [90,220,90], [M.NAPALM]: [255,130,20],
+        [M.BONE]: [230,225,200], [M.MEAT]: [180,60,60], [M.BLOOD]: [150,20,20], [M.MILK]: [245,245,235],
+        [M.HONEY]: [230,170,30], [M.WAX]: [240,230,190], [M.RESIN]: [200,150,50], [M.SULFUR]: [240,220,40],
+        [M.SALTPETER]: [220,220,230], [M.TITANIUM]: [140,150,170], [M.GOLD]: [255,215,0],
+        [M.DIAMOND]: [200,240,255], [M.OBSIDIAN]: [30,20,40], [M.BASALT]: [60,60,70], [M.MOSS]: [40,120,40],
+        [M.VINE]: [60,140,50], [M.MUSHROOM]: [200,100,120], [M.ALGAE]: [50,150,80], [M.PLANKTON]: [100,200,150],
+        [M.CORAL]: [255,120,100], [M.PEARL]: [245,240,230], [M.MAGNET]: [180,50,50], [M.BATTERY]: [220,200,40],
+        [M.WIRE]: [200,150,50], [M.LAMP]: [255,255,180], [M.FIBERGLASS]: [200,220,240],
+        [M.CONCRETE]: [150,150,150], [M.BRICK]: [180,80,60], [M.ASPHALT]: [50,50,55], [M.RUBBER]: [40,40,40],
+        [M.PLASTIC]: [220,220,220], [M.TEFLON]: [230,230,240], [M.NEON]: [255,100,200], [M.HELIUM]: [220,220,255],
+        [M.ARGON]: [180,180,220], [M.CHLORINE]: [180,240,80], [M.FLUORINE]: [200,255,100],
+        [M.AMMONIA]: [200,220,255], [M.METHANE]: [180,220,180], [M.PROPANE]: [200,200,160],
+        [M.ACETYLENE]: [220,200,100], [M.PEROXIDE]: [220,240,255], [M.IODINE]: [120,60,160],
+        [M.HUMAN]: [240,200,160], [M.DINO]: [80,160,80], [M.ANT]: [40,30,20], [M.SPIDER]: [30,30,30],
+        [M.CAT]: [200,150,100], [M.DOG]: [160,120,80], [M.STARFISH]: [255,140,80], [M.SPONGE]: [200,180,100],
+        [M.OCTOPUS]: [180,80,120], [M.CORPSE]: [130,50,50],
+    };
+
+    // Размеры существ (ширина, высота) — многоклеточные
+    const CREATURE_SIZE = {
+        [M.HUMAN]:  { w: 3, h: 6 },
+        [M.DINO]:   { w: 6, h: 4 },
+        [M.ANT]:    { w: 2, h: 1 },
+        [M.SPIDER]: { w: 3, h: 2 },
+        [M.CAT]:    { w: 3, h: 3 },
+        [M.DOG]:    { w: 4, h: 3 },
+        [M.STARFISH]:{ w: 3, h: 3 },
+        [M.SPONGE]: { w: 3, h: 3 },
+        [M.OCTOPUS]:{ w: 4, h: 4 },
+    };
+
+    // Водные существа
+    const WATER_CREATURES = new Set([M.STARFISH, M.SPONGE, M.OCTOPUS]);
+
+    const MAT_LIST = [
+        { id: M.SAND, name: 'Песок' }, { id: M.WATER, name: 'Вода' }, { id: M.OIL, name: 'Масло' },
+        { id: M.NAPALM, name: 'Напалм' }, { id: M.ALCOHOL, name: 'Спирт' }, { id: M.ACID, name: 'Кислота' },
+        { id: M.MERCURY, name: 'Ртуть' }, { id: M.LAVA, name: 'Лава' }, { id: M.FIRE, name: 'Огонь' },
+        { id: M.SMOKE, name: 'Дым' }, { id: M.STEAM, name: 'Пар' }, { id: M.ICE, name: 'Лёд' },
+        { id: M.SNOW, name: 'Снег' }, { id: M.STONE, name: 'Камень' }, { id: M.CLAY, name: 'Глина' },
+        { id: M.GLASS, name: 'Стекло' }, { id: M.METAL, name: 'Металл' }, { id: M.WOOD, name: 'Дерево' },
+        { id: M.PLANT, name: 'Растение' }, { id: M.SEED, name: 'Семя' }, { id: M.GUNPOWDER, name: 'Порох' },
+        { id: M.TNT, name: 'ТНТ' }, { id: M.EXPLOSIVE, name: 'Взрывчатка' }, { id: M.HYDROGEN, name: 'Водород' },
+        { id: M.OXYGEN, name: 'Кислород' }, { id: M.URANIUM, name: 'Уран' }, { id: M.SALT, name: 'Соль' },
+        { id: M.SUGAR, name: 'Сахар' }, { id: M.ASH, name: 'Пепел' }, { id: M.WALL, name: 'Стена' },
+        { id: M.BONE, name: 'Кость' }, { id: M.MEAT, name: 'Мясо' }, { id: M.BLOOD, name: 'Кровь' },
+        { id: M.MILK, name: 'Молоко' }, { id: M.HONEY, name: 'Мёд' }, { id: M.WAX, name: 'Воск' },
+        { id: M.RESIN, name: 'Смола' }, { id: M.SULFUR, name: 'Сера' }, { id: M.SALTPETER, name: 'Селитра' },
+        { id: M.TITANIUM, name: 'Титан' }, { id: M.GOLD, name: 'Золото' }, { id: M.DIAMOND, name: 'Алмаз' },
+        { id: M.OBSIDIAN, name: 'Обсидиан' }, { id: M.BASALT, name: 'Базальт' }, { id: M.MOSS, name: 'Мох' },
+        { id: M.VINE, name: 'Лиана' }, { id: M.MUSHROOM, name: 'Гриб' }, { id: M.ALGAE, name: 'Водоросли' },
+        { id: M.PLANKTON, name: 'Планктон' }, { id: M.CORAL, name: 'Коралл' }, { id: M.PEARL, name: 'Жемчуг' },
+        { id: M.MAGNET, name: 'Магнит' }, { id: M.BATTERY, name: 'Батарея' }, { id: M.WIRE, name: 'Провод' },
+        { id: M.LAMP, name: 'Лампа' }, { id: M.FIBERGLASS, name: 'Стекловолокно' }, { id: M.CONCRETE, name: 'Бетон' },
+        { id: M.BRICK, name: 'Кирпич' }, { id: M.ASPHALT, name: 'Асфальт' }, { id: M.RUBBER, name: 'Резина' },
+        { id: M.PLASTIC, name: 'Пластик' }, { id: M.TEFLON, name: 'Тефлон' }, { id: M.NEON, name: 'Неон' },
+        { id: M.HELIUM, name: 'Гелий' }, { id: M.ARGON, name: 'Аргон' }, { id: M.CHLORINE, name: 'Хлор' },
+        { id: M.FLUORINE, name: 'Фтор' }, { id: M.AMMONIA, name: 'Аммиак' }, { id: M.METHANE, name: 'Метан' },
+        { id: M.PROPANE, name: 'Пропан' }, { id: M.ACETYLENE, name: 'Ацетилен' }, { id: M.PEROXIDE, name: 'Перекись' },
+        { id: M.IODINE, name: 'Йод' },
+        { id: M.HUMAN, name: '🧑 Человек' }, { id: M.DINO, name: '🦖 Динозавр' }, { id: M.ANT, name: '🐜 Муравей' },
+        { id: M.SPIDER, name: '🕷 Паук' }, { id: M.CAT, name: '🐱 Кот' }, { id: M.DOG, name: '🐶 Собака' },
+        { id: M.STARFISH, name: '⭐ Звезда' }, { id: M.SPONGE, name: '🧽 Губка' }, { id: M.OCTOPUS, name: '🐙 Осьминог' },
+        { id: M.CORPSE, name: '💀 Труп' },
+    ];
+
+    const PROPS = {
+        [M.EMPTY]:   { density: 0, state: 'gas' },
+        [M.SAND]:    { density: 1.6, state: 'powder', acidResist: 0.8 },
+        [M.WATER]:   { density: 1.0, state: 'liquid', acidResist: 0.95 },
+        [M.OIL]:     { density: 0.85, state: 'liquid', flammable: 0.6, burnTime: 80, acidResist: 0.7 },
+        [M.NAPALM]:  { density: 0.9, state: 'liquid', flammable: 0.95, burnTime: 200, acidResist: 0.6 },
+        [M.ALCOHOL]: { density: 0.79, state: 'liquid', flammable: 0.9, burnTime: 60, acidResist: 0.5 },
+        [M.FIRE]:    { density: 0.1, state: 'gas' }, [M.SMOKE]: { density: 0.1, state: 'gas' },
+        [M.STEAM]:   { density: 0.2, state: 'gas' },
+        [M.STONE]:   { density: 2.5, state: 'solid', acidResist: 0.5, melting: 1200 },
+        [M.ACID]:    { density: 1.3, state: 'liquid' }, [M.WALL]: { density: 100, state: 'solid', acidResist: 1.0 },
+        [M.LAVA]:    { density: 2.0, state: 'liquid' },
+        [M.ICE]:     { density: 0.92, state: 'solid', acidResist: 0.9, melting: 0 },
+        [M.SNOW]:    { density: 0.3, state: 'powder', acidResist: 0.9, melting: 0 },
+        [M.GUNPOWDER]:{ density: 1.2, state: 'powder', flammable: 0.9, burnTime: 5, acidResist: 0.5 },
+        [M.METAL]:   { density: 7.8, state: 'solid', acidResist: 0.3, melting: 1500 },
+        [M.WOOD]:    { density: 0.7, state: 'solid', flammable: 0.7, burnTime: 150, acidResist: 0.4, melting: 300 },
+        [M.PLANT]:   { density: 0.5, state: 'solid', flammable: 0.8, burnTime: 60, acidResist: 0.2 },
+        [M.SEED]:    { density: 0.6, state: 'powder', flammable: 0.5, burnTime: 30, acidResist: 0.3 },
+        [M.CLAY]:    { density: 1.8, state: 'powder', acidResist: 0.4, melting: 1000 },
+        [M.GLASS]:   { density: 2.5, state: 'solid', acidResist: 0.99, melting: 1400 },
+        [M.MERCURY]: { density: 13.6, state: 'liquid', acidResist: 0.9 },
+        [M.HYDROGEN]:{ density: 0.07, state: 'gas', flammable: 0.95, burnTime: 5, acidResist: 0.9 },
+        [M.OXYGEN]:  { density: 1.1, state: 'gas', acidResist: 0.9 },
+        [M.EXPLOSIVE]:{ density: 1.5, state: 'powder', flammable: 0.9, burnTime: 3, acidResist: 0.3 },
+        [M.TNT]:     { density: 1.4, state: 'solid', flammable: 0.8, burnTime: 3, acidResist: 0.3 },
+        [M.ASH]:     { density: 0.7, state: 'powder', acidResist: 0.9 },
+        [M.SALT]:    { density: 2.1, state: 'powder', acidResist: 0.9, melting: 800 },
+        [M.SUGAR]:   { density: 1.5, state: 'powder', flammable: 0.5, burnTime: 40, acidResist: 0.5, melting: 180 },
+        [M.URANIUM]: { density: 19, state: 'solid', acidResist: 0.6, melting: 1100 },
+        [M.BONE]:    { density: 1.9, state: 'solid', acidResist: 0.4 },
+        [M.MEAT]:    { density: 1.1, state: 'solid', flammable: 0.4, burnTime: 40, acidResist: 0.2 },
+        [M.BLOOD]:   { density: 1.05, state: 'liquid', acidResist: 0.5 },
+        [M.MILK]:    { density: 1.03, state: 'liquid', acidResist: 0.6 },
+        [M.HONEY]:   { density: 1.4, state: 'liquid', acidResist: 0.7 },
+        [M.WAX]:     { density: 0.9, state: 'solid', flammable: 0.6, burnTime: 100, acidResist: 0.5, melting: 60 },
+        [M.RESIN]:   { density: 1.1, state: 'solid', flammable: 0.7, burnTime: 80, acidResist: 0.4, melting: 100 },
+        [M.SULFUR]:  { density: 2.0, state: 'powder', flammable: 0.6, burnTime: 60, acidResist: 0.6 },
+        [M.SALTPETER]:{ density: 2.1, state: 'powder', acidResist: 0.8 },
+        [M.TITANIUM]:{ density: 4.5, state: 'solid', acidResist: 0.9, melting: 1600 },
+        [M.GOLD]:    { density: 19.3, state: 'solid', acidResist: 0.95, melting: 1064 },
+        [M.DIAMOND]: { density: 3.5, state: 'solid', acidResist: 1.0, melting: 3500 },
+        [M.OBSIDIAN]:{ density: 2.6, state: 'solid', acidResist: 0.8, melting: 1200 },
+        [M.BASALT]:  { density: 2.9, state: 'solid', acidResist: 0.6, melting: 1100 },
+        [M.MOSS]:    { density: 0.4, state: 'solid', flammable: 0.4, burnTime: 30, acidResist: 0.2 },
+        [M.VINE]:    { density: 0.5, state: 'solid', flammable: 0.5, burnTime: 40, acidResist: 0.2 },
+        [M.MUSHROOM]:{ density: 0.5, state: 'solid', flammable: 0.6, burnTime: 30, acidResist: 0.2 },
+        [M.ALGAE]:   { density: 0.3, state: 'solid', flammable: 0.4, burnTime: 20, acidResist: 0.3 },
+        [M.PLANKTON]:{ density: 0.2, state: 'powder', flammable: 0.3, burnTime: 10, acidResist: 0.3 },
+        [M.CORAL]:   { density: 1.8, state: 'solid', acidResist: 0.4 },
+        [M.PEARL]:   { density: 2.7, state: 'solid', acidResist: 0.9 },
+        [M.MAGNET]:  { density: 5.0, state: 'solid', acidResist: 0.5 },
+        [M.BATTERY]: { density: 2.0, state: 'solid', acidResist: 0.3 },
+        [M.WIRE]:    { density: 8.9, state: 'solid', acidResist: 0.6 },
+        [M.LAMP]:    { density: 2.5, state: 'solid', acidResist: 0.8 },
+        [M.FIBERGLASS]:{ density: 2.5, state: 'solid', acidResist: 0.95 },
+        [M.CONCRETE]:{ density: 2.4, state: 'solid', acidResist: 0.6 },
+        [M.BRICK]:   { density: 1.8, state: 'solid', acidResist: 0.5 },
+        [M.ASPHALT]: { density: 2.3, state: 'solid', acidResist: 0.7 },
+        [M.RUBBER]:  { density: 1.1, state: 'solid', flammable: 0.3, burnTime: 60, acidResist: 0.8 },
+        [M.PLASTIC]: { density: 1.0, state: 'solid', flammable: 0.5, burnTime: 80, acidResist: 0.7 },
+        [M.TEFLON]:  { density: 2.2, state: 'solid', acidResist: 1.0 },
+        [M.NEON]:    { density: 0.9, state: 'gas' },
+        [M.HELIUM]:  { density: 0.18, state: 'gas' },
+        [M.ARGON]:   { density: 1.8, state: 'gas' },
+        [M.CHLORINE]:{ density: 3.2, state: 'gas', acidResist: 0.1 },
+        [M.FLUORINE]:{ density: 1.7, state: 'gas', acidResist: 0.05 },
+        [M.AMMONIA]: { density: 0.8, state: 'gas', acidResist: 0.3 },
+        [M.METHANE]: { density: 0.7, state: 'gas', flammable: 0.9, burnTime: 30, acidResist: 0.5 },
+        [M.PROPANE]: { density: 2.0, state: 'gas', flammable: 0.9, burnTime: 40, acidResist: 0.5 },
+        [M.ACETYLENE]:{ density: 1.1, state: 'gas', flammable: 0.95, burnTime: 10, acidResist: 0.4 },
+        [M.PEROXIDE]:{ density: 1.4, state: 'liquid', acidResist: 0.3 },
+        [M.IODINE]:  { density: 4.9, state: 'solid', acidResist: 0.7 },
+        [M.HUMAN]:   { density: 1.0, state: 'solid', flammable: 0.3, burnTime: 30, acidResist: 0.1, alive: true },
+        [M.DINO]:    { density: 1.2, state: 'solid', flammable: 0.3, burnTime: 50, acidResist: 0.1, alive: true },
+        [M.ANT]:     { density: 0.5, state: 'solid', flammable: 0.4, burnTime: 5, acidResist: 0.1, alive: true },
+        [M.SPIDER]:  { density: 0.4, state: 'solid', flammable: 0.4, burnTime: 5, acidResist: 0.1, alive: true },
+        [M.CAT]:     { density: 0.8, state: 'solid', flammable: 0.3, burnTime: 20, acidResist: 0.1, alive: true },
+        [M.DOG]:     { density: 0.9, state: 'solid', flammable: 0.3, burnTime: 25, acidResist: 0.1, alive: true },
+        [M.STARFISH]:{ density: 0.9, state: 'solid', flammable: 0.2, burnTime: 15, acidResist: 0.1, alive: true },
+        [M.SPONGE]:  { density: 0.3, state: 'solid', flammable: 0.4, burnTime: 20, acidResist: 0.2, alive: true },
+        [M.OCTOPUS]: { density: 0.9, state: 'solid', flammable: 0.3, burnTime: 20, acidResist: 0.1, alive: true },
+        [M.CORPSE]:  { density: 1.1, state: 'solid', flammable: 0.4, burnTime: 40, acidResist: 0.2 },
+    };
+
+    const HOT_MATS = new Set([M.FIRE, M.LAVA]);
+
+    // ============================================================
+    //  СОСТОЯНИЕ
+    // ============================================================
+    const canvas = document.getElementById('world');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+
+    const grid = new Uint8Array(W * H);
+    const life = new Int16Array(W * H);
+    const updated = new Uint8Array(W * H);
+    const temp = new Int16Array(W * H);
+
+    // Многоклеточные существа: список активных существ
+    // Каждое существо: { id, type, x, y, w, h, age, hunger, dir, hp }
+    const creatures = [];
+    let creatureIdCounter = 0;
+
+    let currentMat = M.SAND;
+    let brushSize = 4;
+    let paused = false;
+    let erasing = false;
+
+    // ============================================================
+    //  ВСПОМОГАТЕЛЬНЫЕ
+    // ============================================================
+    const idx = (x, y) => y * W + x;
+    const inBounds = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
+    const rnd = () => Math.random();
+    const rndInt = (n) => (Math.random() * n) | 0;
+
+    function getState(m) { const p = PROPS[m]; return p ? p.state : 'solid'; }
+    const isSolid   = m => getState(m) === 'solid';
+    const isLiquid  = m => getState(m) === 'liquid';
+    const isGas     = m => getState(m) === 'gas';
+    const isPowder  = m => getState(m) === 'powder';
+    const isCreatureType = m => CREATURE_SIZE[m] !== undefined;
+    const density   = m => (PROPS[m] ? PROPS[m].density : 1);
+
+    function baseTemp(m) {
+        if (m === M.LAVA) return 800; if (m === M.FIRE) return 700;
+        if (m === M.ICE || m === M.SNOW) return -20; if (m === M.STEAM) return 150;
+        return 20;
+    }
+
+    // Проверка, свободна ли область для существа
+    function canPlaceCreature(x, y, w, h) {
+        if (x < 0 || y < 0 || x + w > W || y + h > H) return false;
+        for (let dy = 0; dy < h; dy++) {
+            for (let dx = 0; dx < w; dx++) {
+                const m = grid[idx(x + dx, y + dy)];
+                if (m !== M.EMPTY && !isLiquid(m) && !isGas(m)) return false;
+            }
+        }
+        return true;
+    }
+
+    // Проверка, находится ли область в воде
+    function isAreaWater(x, y, w, h) {
+        let waterCount = 0, total = 0;
+        for (let dy = 0; dy < h; dy++) {
+            for (let dx = 0; dx < w; dx++) {
+                if (!inBounds(x+dx, y+dy)) return false;
+                const m = grid[idx(x + dx, y + dy)];
+                total++;
+                if (m === M.WATER) waterCount++;
+            }
+        }
+        return waterCount / total > 0.5;
+    }
+
+    // Заполнить область существом (или пустотой при смерти)
+    function fillCreatureArea(c, fillMat) {
+        for (let dy = 0; dy < c.h; dy++) {
+            for (let dx = 0; dx < c.w; dx++) {
+                const gx = c.x + dx, gy = c.y + dy;
+                if (!inBounds(gx, gy)) continue;
+                const i = idx(gx, gy);
+                if (fillMat === M.EMPTY) {
+                    grid[i] = M.EMPTY;
+                    life[i] = 0;
+                    temp[i] = 20;
+                } else {
+                    grid[i] = fillMat;
+                    life[i] = 0;
+                    temp[i] = 20;
+                }
+            }
+        }
+    }
+
+    // Создать существо
+    function spawnCreature(type, x, y) {
+        const size = CREATURE_SIZE[type];
+        if (!size) return null;
+        const c = {
+            id: ++creatureIdCounter,
+            type, x, y,
+            w: size.w, h: size.h,
+            age: 0,
+            hunger: 100,
+            dir: rnd() < 0.5 ? -1 : 1,
+            hp: 100,
+        };
+        if (!canPlaceCreature(x, y, c.w, c.h)) return null;
+        // Заполняем область существом
+        fillCreatureArea(c, M.EMPTY);
+        for (let dy = 0; dy < c.h; dy++) {
+            for (let dx = 0; dx < c.w; dx++) {
+                const i = idx(x + dx, y + dy);
+                grid[i] = type;
+            }
+        }
+        creatures.push(c);
+        return c;
+    }
+
+    // Удалить существо (превратить в труп или пустоту)
+    function killCreature(c, corpse = true) {
+        fillCreatureArea(c, corpse ? M.CORPSE : M.EMPTY);
+        const idxC = creatures.indexOf(c);
+        if (idxC !== -1) creatures.splice(idxC, 1);
+    }
+
+    // Переместить существо (сохранить область)
+    function moveCreature(c, newX, newY) {
+        if (newX === c.x && newY === c.y) return false;
+        if (!canPlaceCreature(newX, newY, c.w, c.h)) return false;
+        // Очищаем старую позицию
+        fillCreatureArea(c, M.EMPTY);
+        // Заполняем новую
+        c.x = newX; c.y = newY;
+        for (let dy = 0; dy < c.h; dy++) {
+            for (let dx = 0; dx < c.w; dx++) {
+                const i = idx(c.x + dx, c.y + dy);
+                grid[i] = c.type;
+            }
+        }
+        return true;
+    }
+
+    // ============================================================
+    //  РЕАКЦИИ
+    // ============================================================
+    function ignite(i) {
+        const m = grid[i]; const p = PROPS[m];
+        if (!p || !p.flammable || rnd() > p.flammable) return false;
+        setCell(i, M.FIRE, p.burnTime || 30, 600);
+        return true;
+    }
+
+    function explode(cx, cy, radius, power) {
+        const r2 = radius * radius;
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                const d2 = dx*dx + dy*dy; if (d2 > r2) continue;
+                const x = cx + dx, y = cy + dy; if (!inBounds(x, y)) continue;
+                const i = idx(x, y); const m = grid[i];
+                if (m === M.WALL) continue;
+                const prob = 1 - Math.sqrt(d2) / radius;
+                if (rnd() < prob * power) {
+                    if (m === M.TNT || m === M.EXPLOSIVE || m === M.GUNPOWDER) setCell(i, M.FIRE, 15, 800);
+                    else if (rnd() < 0.3) setCell(i, M.FIRE, 20 + rndInt(20), 700);
+                    else setCell(i, M.EMPTY, 0, 20);
+                }
+            }
+        }
+    }
+
+    function setCell(i, mat, l = 0, t = null) {
+        grid[i] = mat; life[i] = l; temp[i] = (t !== null) ? t : baseTemp(mat);
+    }
+
+    // ============================================================
+    //  ОБНОВЛЕНИЕ МАТЕРИАЛОВ
+    // ============================================================
+    function updatePowder(x, y, i, mat) {
+        if (y + 1 < H) {
+            const below = idx(x, y + 1); const bm = grid[below];
+            if (bm === M.EMPTY || isGas(bm)) { moveCell(i, below); return; }
+            if (isLiquid(bm) && density(mat) < density(bm) * 0.9) {} 
+            else if (isLiquid(bm) && density(mat) >= density(bm) * 0.9) { swapCells(i, below); return; }
+        }
+        if (y + 1 < H) {
+            const dirs = rnd() < 0.5 ? [-1, 1] : [1, -1];
+            for (const d of dirs) {
+                const nx = x + d; if (nx < 0 || nx >= W) continue;
+                const ni = idx(nx, y + 1); const nm = grid[ni];
+                if (nm === M.EMPTY || isGas(nm)) { moveCell(i, ni); return; }
+            }
+        }
+    }
+
+    function updateLiquid(x, y, i, mat) {
+        if (y + 1 < H) {
+            const below = idx(x, y + 1); const bm = grid[below];
+            if (bm === M.EMPTY || isGas(bm)) { moveCell(i, below); return; }
+            if (isLiquid(bm) && bm !== mat && density(mat) > density(bm) + 0.05) { swapCells(i, below); return; }
+        }
+        const canL = x - 1 >= 0 && (grid[idx(x-1, y)] === M.EMPTY || isGas(grid[idx(x-1, y)]));
+        const canR = x + 1 < W && (grid[idx(x+1, y)] === M.EMPTY || isGas(grid[idx(x+1, y)]));
+        if (rnd() < 0.5) {
+            if (canL) { moveCell(i, idx(x-1, y)); return; }
+            else if (canR) { moveCell(i, idx(x+1, y)); return; }
+        } else {
+            if (canR) { moveCell(i, idx(x+1, y)); return; }
+            else if (canL) { moveCell(i, idx(x-1, y)); return; }
+        }
+        if (y + 1 < H) {
+            const dirs = rnd() < 0.5 ? [-1, 1] : [1, -1];
+            for (const d of dirs) {
+                const nx = x + d; if (nx < 0 || nx >= W) continue;
+                const ni = idx(nx, y + 1);
+                if (grid[ni] === M.EMPTY) { moveCell(i, ni); return; }
+            }
+        }
+    }
+
+    function updateGas(x, y, i, mat) {
+        if (life[i] > 0) life[i]--;
+        else {
+            if (mat === M.STEAM && rnd() < 0.1) setCell(i, M.WATER, 0, 20);
+            else setCell(i, M.EMPTY, 0, 20);
+            return;
+        }
+        if (y - 1 >= 0) {
+            const above = idx(x, y - 1);
+            if (grid[above] === M.EMPTY && rnd() < 0.85) { moveCell(i, above); return; }
+        }
+        if (y - 1 >= 0 && rnd() < 0.5) {
+            const d = rnd() < 0.5 ? -1 : 1; const nx = x + d;
+            if (nx >= 0 && nx < W) { const ni = idx(nx, y - 1); if (grid[ni] === M.EMPTY) { moveCell(i, ni); return; } }
+        }
+        if (rnd() < 0.3) {
+            const d = rnd() < 0.5 ? -1 : 1; const nx = x + d;
+            if (nx >= 0 && nx < W) { const ni = idx(nx, y); if (grid[ni] === M.EMPTY) { moveCell(i, ni); return; } }
+        }
+    }
+
+    function updateFire(x, y, i) {
+        if (life[i] > 0) life[i]--;
+        else {
+            if (rnd() < 0.4) setCell(i, M.SMOKE, 40 + rndInt(40), 100);
+            else setCell(i, M.EMPTY, 0, 20);
+            return;
+        }
+        const dirs = [[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const ni = idx(nx, ny); const nm = grid[ni];
+            if (PROPS[nm] && PROPS[nm].flammable && nm !== M.FIRE && rnd() < 0.15) ignite(ni);
+            if (nm === M.WATER && rnd() < 0.05) setCell(ni, M.STEAM, 60 + rndInt(60), 150);
+            if ((nm === M.ICE || nm === M.SNOW) && rnd() < 0.15) setCell(ni, M.WATER, 0, 20);
+            if (nm === M.SAND && rnd() < 0.01) setCell(ni, M.GLASS, 0, 800);
+            if (nm === M.CLAY && rnd() < 0.01) setCell(ni, M.STONE, 0, 800);
+            if (nm === M.GUNPOWDER && rnd() < 0.3) { explode(nx, ny, 4, 0.8); setCell(ni, M.FIRE, 10, 800); }
+            if ((nm === M.TNT || nm === M.EXPLOSIVE) && rnd() < 0.2) { explode(nx, ny, 6, 0.9); setCell(ni, M.EMPTY, 0, 20); }
+            if (nm === M.HYDROGEN && rnd() < 0.1) explode(nx, ny, 5, 0.7);
+            if (nm === M.URANIUM && rnd() < 0.005) setCell(ni, M.FIRE, 20, 700);
+            if (nm === M.SULFUR && rnd() < 0.02) setCell(ni, M.FIRE, 30, 500);
+            if (nm === M.SALTPETER && rnd() < 0.01) setCell(ni, M.FIRE, 20, 500);
+            if (nm === M.METHANE && rnd() < 0.1) explode(nx, ny, 4, 0.6);
+            if (nm === M.PROPANE && rnd() < 0.1) explode(nx, ny, 5, 0.7);
+            if (nm === M.ACETYLENE && rnd() < 0.15) explode(nx, ny, 6, 0.8);
+            if (nm === M.PEROXIDE && rnd() < 0.05) setCell(ni, M.WATER, 0, 20);
+        }
+        if (y - 1 >= 0 && rnd() < 0.7) {
+            const above = idx(x, y - 1);
+            if (grid[above] === M.EMPTY) { moveCell(i, above); return; }
+        }
+        if (rnd() < 0.3) {
+            const d = rnd() < 0.5 ? -1 : 1; const nx = x + d;
+            if (nx >= 0 && nx < W) { const ni = idx(nx, y); if (grid[ni] === M.EMPTY) { moveCell(i, ni); return; } }
+        }
+    }
+
+    function updateLava(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const ni = idx(nx, ny); const nm = grid[ni];
+            if (PROPS[nm] && PROPS[nm].flammable && rnd() < 0.3) ignite(ni);
+            if (nm === M.WATER) { setCell(ni, M.STEAM, 80 + rndInt(60), 200); setCell(i, M.STONE, 0, 600); return; }
+            if (nm === M.ICE || nm === M.SNOW) setCell(ni, M.WATER, 0, 20);
+            if (nm === M.SAND && rnd() < 0.05) setCell(ni, M.GLASS, 0, 800);
+            if (nm === M.STONE && rnd() < 0.005) setCell(ni, M.LAVA, 0, 800);
+            if (nm === M.METAL && rnd() < 0.01) setCell(ni, M.LAVA, 0, 800);
+            if (nm === M.TITANIUM && rnd() < 0.005) setCell(ni, M.LAVA, 0, 800);
+            if (nm === M.GOLD && rnd() < 0.02) setCell(ni, M.LAVA, 0, 800);
+            if ((nm === M.WOOD || nm === M.OIL || nm === M.NAPALM) && rnd() < 0.3) ignite(ni);
+        }
+        if (y + 1 < H) {
+            const below = idx(x, y + 1);
+            if (grid[below] === M.EMPTY || isGas(grid[below])) { moveCell(i, below); return; }
+        }
+        if (rnd() < 0.2) {
+            const d = rnd() < 0.5 ? -1 : 1; const nx = x + d;
+            if (nx >= 0 && nx < W) { const ni = idx(nx, y); if (grid[ni] === M.EMPTY) { moveCell(i, ni); return; } }
+        }
+        if (rnd() < 0.0005) setCell(i, M.STONE, 0, 600);
+    }
+
+    function updateAcid(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const ni = idx(nx, ny); const nm = grid[ni];
+            if (nm === M.EMPTY || nm === M.WALL || nm === M.ACID || nm === M.GLASS || nm === M.TEFLON) continue;
+            const resist = PROPS[nm] ? (PROPS[nm].acidResist || 0) : 0;
+            if (rnd() > resist) {
+                setCell(ni, M.SMOKE, 20, 100);
+                if (rnd() < 0.5) { setCell(i, M.EMPTY, 0, 20); return; }
+            }
+        }
+        updateLiquid(x, y, i, M.ACID);
+    }
+
+    function updateIce(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const ni = idx(nx, ny);
+            if (HOT_MATS.has(grid[ni]) && rnd() < 0.2) { setCell(i, M.WATER, 0, 20); return; }
+            if (grid[ni] === M.WATER && rnd() < 0.002) setCell(ni, M.ICE, 0, -20);
+        }
+    }
+
+    function updateSnow(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            if (HOT_MATS.has(grid[idx(nx, ny)]) && rnd() < 0.3) { setCell(i, M.WATER, 0, 20); return; }
+        }
+        updatePowder(x, y, i, M.SNOW);
+    }
+
+    function updatePlant(x, y, i) {
+        let hasWater = false;
+        const dirs = [[-1,0],[1,0],[0,1],[0,-1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy;
+            if (inBounds(nx, ny) && grid[idx(nx, ny)] === M.WATER) { hasWater = true; break; }
+        }
+        if (hasWater && y - 1 >= 0 && rnd() < 0.01) {
+            const above = idx(x, y - 1);
+            if (grid[above] === M.EMPTY) {
+                setCell(above, M.PLANT, 0, 20);
+                for (const [dx, dy] of dirs) {
+                    const nx = x + dx, ny = y + dy;
+                    if (inBounds(nx, ny) && grid[idx(nx, ny)] === M.WATER) { setCell(idx(nx, ny), M.EMPTY, 0, 20); break; }
+                }
+            }
+        }
+    }
+
+    function updateSeed(x, y, i) {
+        if (y + 1 < H) {
+            const below = idx(x, y + 1); const bm = grid[below];
+            if (bm === M.EMPTY || isGas(bm)) { moveCell(i, below); return; }
+            if ((bm === M.WATER || bm === M.SAND || bm === M.CLAY) && rnd() < 0.01) { setCell(i, M.PLANT, 0, 20); return; }
+        }
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy;
+            if (inBounds(nx, ny) && grid[idx(nx, ny)] === M.WATER && rnd() < 0.005) { setCell(i, M.PLANT, 0, 20); return; }
+        }
+    }
+
+    function updateMercury(x, y, i) { updateLiquid(x, y, i, M.MERCURY); }
+
+    function updateHydrogen(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const ni = idx(nx, ny);
+            if (grid[ni] === M.FIRE || grid[ni] === M.LAVA) { explode(x, y, 5, 0.8); setCell(i, M.EMPTY, 0, 20); return; }
+            if (grid[ni] === M.OXYGEN && rnd() < 0.05) { explode(x, y, 3, 0.6); setCell(i, M.EMPTY, 0, 20); return; }
+        }
+        updateGas(x, y, i, M.HYDROGEN);
+    }
+
+    function updateOxygen(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const ni = idx(nx, ny);
+            if (grid[ni] === M.FIRE && rnd() < 0.01) life[ni] = Math.min(life[ni] + 5, 200);
+            if (grid[ni] === M.HYDROGEN && rnd() < 0.05) { explode(nx, ny, 3, 0.6); setCell(i, M.EMPTY, 0, 20); return; }
+        }
+        updateGas(x, y, i, M.OXYGEN);
+    }
+
+    function updateMetal(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const nm = grid[idx(nx, ny)];
+            if ((nm === M.LAVA || nm === M.FIRE) && rnd() < 0.005) { setCell(i, M.LAVA, 0, 800); return; }
+            if (nm === M.ACID && rnd() < 0.005) { setCell(i, M.SMOKE, 20, 100); return; }
+        }
+    }
+
+    function updateWood(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const nm = grid[idx(nx, ny)];
+            if ((nm === M.FIRE || nm === M.LAVA) && rnd() < 0.05) { ignite(i); return; }
+        }
+    }
+
+    function updateClay(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const nm = grid[idx(nx, ny)];
+            if ((nm === M.FIRE || nm === M.LAVA) && rnd() < 0.01) { setCell(i, M.STONE, 0, 600); return; }
+        }
+        updatePowder(x, y, i, M.CLAY);
+    }
+
+    function updateGlass(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            if (grid[idx(nx, ny)] === M.LAVA && rnd() < 0.001) { setCell(i, M.LAVA, 0, 800); return; }
+        }
+    }
+
+    function updateSugar(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const nm = grid[idx(nx, ny)];
+            if ((nm === M.FIRE || nm === M.LAVA) && rnd() < 0.02) { setCell(i, M.ASH, 0, 100); return; }
+        }
+        updatePowder(x, y, i, M.SUGAR);
+    }
+
+    function updateSalt(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            if (grid[idx(nx, ny)] === M.WATER && rnd() < 0.02) { setCell(i, M.WATER, 0, 20); return; }
+        }
+        updatePowder(x, y, i, M.SALT);
+    }
+
+    function updateUranium(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            const ni = idx(nx, ny); const nm = grid[ni];
+            if (nm === M.WATER && rnd() < 0.002) setCell(ni, M.STEAM, 40, 150);
+            if (PROPS[nm] && PROPS[nm].flammable && rnd() < 0.005) ignite(ni);
+            if (nm === M.URANIUM && rnd() < 0.0005) { explode(nx, ny, 4, 0.5); setCell(ni, M.LAVA, 0, 800); }
+        }
+    }
+
+    function updateAsh(x, y, i) { updatePowder(x, y, i, M.ASH); }
+
+    function updateStone(x, y, i) {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dx, dy] of dirs) {
+            const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny)) continue;
+            if (grid[idx(nx, ny)] === M.LAVA && rnd() < 0.002) { setCell(i, M.LAVA, 0, 800); return; }
+        }
+    }
+
+    function moveCell(from, to) {
+        grid[to] = grid[from]; life[to] = life[from]; temp[to] = temp[from];
+        grid[from] = M.EMPTY; life[from] = 0; temp[from] = 20;
+        updated[to] = 1; updated[from] = 1;
+    }
+
+    function swapCells(a, b) {
+        const gm = grid[a], gl = life[a], gt = temp[a];
+        grid[a] = grid[b]; life[a] = life[b]; temp[a] = temp[b];
+        grid[b] = gm; life[b] = gl; temp[b] = gt;
+        updated[a] = 1; updated[b] = 1;
+    }
+
+    // ============================================================
+    //  ОБНОВЛЕНИЕ СУЩЕСТВ (многоклеточных)
+    // ============================================================
+    function updateCreatures() {
+        // Копируем список, так как некоторые могут умереть
+        const list = [...creatures];
+        for (const c of list) {
+            // Если существо уже удалено — пропускаем
+            if (!creatures.includes(c)) continue;
+
+            c.age++;
+            if (c.age % 20 === 0) c.hunger = Math.max(0, c.hunger - 1);
+
+            // Проверка среды
+            const inWater = isAreaWater(c.x, c.y, c.w, c.h);
+            const isWaterCreature = WATER_CREATURES.has(c.type);
+
+            // Водные существа задыхаются на воздухе
+            if (isWaterCreature && !inWater) {
+                if (rnd() < 0.01) { killCreature(c, true); continue; }
+            }
+
+            // Смерть от голода/старости
+            if (c.hunger <= 0 || c.age > 3000 + rndInt(2000)) {
+                killCreature(c, true);
+                continue;
+            }
+
+            // Проверка опасности (огонь/лава рядом)
+            let danger = false;
+            for (let dy = -1; dy <= c.h; dy++) {
+                for (let dx = -1; dx <= c.w; dx++) {
+                    const nx = c.x + dx, ny = c.y + dy;
+                    if (!inBounds(nx, ny)) continue;
+                    const m = grid[idx(nx, ny)];
+                    if (m === M.FIRE || m === M.LAVA) { danger = true; break; }
+                }
+                if (danger) break;
+            }
+
+            if (danger) {
+                // Пытаемся убежать
+                const fleeDir = -c.dir;
+                const nx = c.x + fleeDir;
+                if (canPlaceCreature(nx, c.y, c.w, c.h)) {
+                    moveCreature(c, nx, c.y);
+                    continue;
+                }
+                // Или прыгаем вверх
+                if (canPlaceCreature(c.x, c.y - 1, c.w, c.h)) {
+                    moveCreature(c, c.x, c.y - 1);
+                    continue;
+                }
+                // Если некуда — умираем
+                if (rnd() < 0.1) { killCreature(c, true); continue; }
+            }
+
+            // Гравитация для наземных существ (не водных)
+            if (!isWaterCreature) {
+                // Если под существом пустота или газ — падаем
+                let canFall = true;
+                for (let dx = 0; dx < c.w; dx++) {
+                    const belowY = c.y + c.h;
+                    if (belowY < H) {
+                        const m = grid[idx(c.x + dx, belowY)];
+                        if (m !== M.EMPTY && !isLiquid(m) && !isGas(m)) { canFall = false; break; }
+                    } else { canFall = false; break; }
+                }
+                if (canFall && canPlaceCreature(c.x, c.y + 1, c.w, c.h)) {
+                    moveCreature(c, c.x, c.y + 1);
+                    continue;
+                }
+            } else {
+                // Водные существа плавают в воде (медленно двигаются)
+                if (inWater && rnd() < 0.3) {
+                    // Движение в воде
+                    const dx = rnd() < 0.5 ? -1 : 1;
+                    if (canPlaceCreature(c.x + dx, c.y, c.w, c.h)) {
+                        moveCreature(c, c.x + dx, c.y);
+                        continue;
+                    }
+                    if (rnd() < 0.3 && canPlaceCreature(c.x, c.y - 1, c.w, c.h)) {
+                        moveCreature(c, c.x, c.y - 1);
+                        continue;
+                    }
+                }
+            }
+
+            // Поиск еды (упрощённо: проверяем соседние клетки на наличие еды)
+            if (c.hunger < 70) {
+                // Ищем еду в радиусе 3 клеток
+                let found = null;
+                for (let dy = -3; dy <= c.h + 3 && !found; dy++) {
+                    for (let dx = -3; dx <= c.w + 3; dx++) {
+                        const nx = c.x + dx, ny = c.y + dy;
+                        if (!inBounds(nx, ny)) continue;
+                        const m = grid[idx(nx, ny)];
+                        let isFood = false;
+                        if (c.type === M.HUMAN || c.type === M.DOG || c.type === M.CAT) {
+                            isFood = m === M.PLANT || m === M.SEED || m === M.MEAT || m === M.CORPSE || m === M.MUSHROOM || m === M.SUGAR || m === M.MILK || m === M.HONEY;
+                        } else if (c.type === M.DINO) {
+                            isFood = m === M.PLANT || m === M.WOOD || m === M.MEAT || m === M.CORPSE || m === M.MUSHROOM || m === M.VINE;
+                        } else if (c.type === M.ANT) {
+                            isFood = m === M.SUGAR || m === M.HONEY || m === M.MEAT || m === M.CORPSE || m === M.MUSHROOM;
+                        } else if (c.type === M.SPIDER) {
+                            isFood = m === M.ANT || m === M.CORPSE || m === M.MEAT;
+                        } else if (c.type === M.STARFISH) {
+                            isFood = m === M.CORAL || m === M.PLANKTON || m === M.MEAT;
+                        } else if (c.type === M.SPONGE) {
+                            isFood = m === M.PLANKTON || m === M.WATER;
+                        } else if (c.type === M.OCTOPUS) {
+                            isFood = m === M.PLANKTON || m === M.CORPSE || m === M.CORAL;
+                        }
+                        if (isFood) { found = { x: nx, y: ny }; break; }
+                    }
+                }
+                if (found) {
+                    // Пытаемся съесть (если еда в пределах досягаемости)
+                    const distX = Math.abs(found.x - (c.x + c.w/2));
+                    const distY = Math.abs(found.y - (c.y + c.h/2));
+                    if (distX <= 2 && distY <= 2) {
+                        const ni = idx(found.x, found.y);
+                        setCell(ni, M.EMPTY, 0, 20);
+                        c.hunger = Math.min(100, c.hunger + 25);
+                        continue;
+                    } else {
+                        // Двигаемся к еде
+                        const dirX = Math.sign(found.x - (c.x + c.w/2));
+                        const dirY = Math.sign(found.y - (c.y + c.h/2));
+                        const nx = c.x + dirX;
+                        if (canPlaceCreature(nx, c.y, c.w, c.h)) { moveCreature(c, nx, c.y); continue; }
+                        const ny = c.y + dirY;
+                        if (canPlaceCreature(c.x, ny, c.w, c.h)) { moveCreature(c, c.x, ny); continue; }
+                    }
+                }
+            }
+
+            // Случайное блуждание
+            if (rnd() < 0.05) {
+                if (rnd() < 0.3) c.dir = -c.dir;
+                // Движение в направлении
+                const nx = c.x + c.dir;
+                if (canPlaceCreature(nx, c.y, c.w, c.h)) {
+                    moveCreature(c, nx, c.y);
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    //  ГЛАВНЫЙ ШАГ
+    // ============================================================
+    function step() {
+        updated.fill(0);
+
+        // Сначала обновляем существ (они занимают область)
+        updateCreatures();
+
+        // Затем обновляем материалы
+        for (let y = H - 1; y >= 0; y--) {
+            const dir = (y % 2 === 0) ? 1 : -1;
+            for (let k = 0; k < W; k++) {
+                const x = (dir === 1) ? k : W - 1 - k;
+                const i = idx(x, y);
+                if (updated[i]) continue;
+                const m = grid[i];
+                if (m === M.EMPTY || m === M.WALL) continue;
+
+                // Пропускаем клетки существ (они обрабатываются отдельно)
+                if (isCreatureType(m)) continue;
+
+                switch (m) {
+                    case M.SAND: case M.GUNPOWDER: updatePowder(x, y, i, m); break;
+                    case M.SNOW: updateSnow(x, y, i); break;
+                    case M.ASH: updateAsh(x, y, i); break;
+                    case M.SALT: updateSalt(x, y, i); break;
+                    case M.SUGAR: updateSugar(x, y, i); break;
+                    case M.SEED: updateSeed(x, y, i); break;
+                    case M.CLAY: updateClay(x, y, i); break;
+                    case M.WATER: case M.OIL: case M.NAPALM: case M.ALCOHOL: updateLiquid(x, y, i, m); break;
+                    case M.MERCURY: updateMercury(x, y, i); break;
+                    case M.ACID: updateAcid(x, y, i); break;
+                    case M.LAVA: updateLava(x, y, i); break;
+                    case M.FIRE: updateFire(x, y, i); break;
+                    case M.SMOKE: case M.STEAM: updateGas(x, y, i, m); break;
+                    case M.HYDROGEN: updateHydrogen(x, y, i); break;
+                    case M.OXYGEN: updateOxygen(x, y, i); break;
+                    case M.ICE: updateIce(x, y, i); break;
+                    case M.STONE: updateStone(x, y, i); break;
+                    case M.METAL: updateMetal(x, y, i); break;
+                    case M.WOOD: updateWood(x, y, i); break;
+                    case M.PLANT: updatePlant(x, y, i); break;
+                    case M.GLASS: updateGlass(x, y, i); break;
+                    case M.URANIUM: updateUranium(x, y, i); break;
+                    case M.MOSS: updatePlant(x, y, i); break;
+                    case M.VINE: updatePlant(x, y, i); break;
+                    case M.MUSHROOM: updatePlant(x, y, i); break;
+                    case M.ALGAE: updatePlant(x, y, i); break;
+                    case M.PLANKTON: updatePowder(x, y, i, m); break;
+                    case M.SULFUR: updatePowder(x, y, i, m); break;
+                    case M.SALTPETER: updatePowder(x, y, i, m); break;
+                    default: break;
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    //  ОТРИСОВКА
+    // ============================================================
+    function draw() {
+        const img = ctx.createImageData(W, H);
+        const data = img.data;
+        const now = Date.now();
+        for (let i = 0; i < W * H; i++) {
+            const m = grid[i];
+            let r, g, b;
+            if (m === M.EMPTY) { r = 11; g = 14; b = 18; }
+            else {
+                const col = C[m] || [255, 0, 255];
+                r = col[0]; g = col[1]; b = col[2];
+                if (m === M.FIRE) { const fl = rnd() * 50; r = Math.min(255, r + fl); g = Math.min(255, g + fl * 0.6); }
+                else if (m === M.LAVA) { const p = Math.sin(now * 0.005 + i * 0.1) * 20; r = Math.min(255, 255 + p); g = Math.min(255, 90 + p * 0.5); }
+                else if (m === M.ACID) { const gl = Math.sin(now * 0.01 + i) * 25; g = Math.min(255, g + gl); }
+                else if (m === M.URANIUM) { const gl = Math.sin(now * 0.01 + i * 0.5) * 30; g = Math.min(255, g + gl); }
+                else if (m === M.SMOKE || m === M.STEAM) { const a = Math.min(1, life[i] / 80); r *= (0.5 + 0.5*a); g *= (0.5 + 0.5*a); b *= (0.5 + 0.5*a); }
+                else if (m === M.HYDROGEN) { const gl = Math.sin(now * 0.02 + i) * 20; b = Math.min(255, b + gl); }
+                else if (m === M.GLASS) { r = Math.min(255, r + 15); g = Math.min(255, g + 15); b = Math.min(255, b + 15); }
+                // Для существ — пульсация
+                else if (isCreatureType(m)) {
+                    const pulse = Math.sin(now * 0.005 + i * 0.5) * 15;
+                    r = Math.min(255, Math.max(0, r + pulse));
+                    g = Math.min(255, Math.max(0, g + pulse));
+                    b = Math.min(255, Math.max(0, b + pulse));
+                }
+            }
+            const p = i * 4;
+            data[p] = r | 0; data[p+1] = g | 0; data[p+2] = b | 0; data[p+3] = 255;
+        }
+        ctx.putImageData(img, 0, 0);
+    }
+
+    // ============================================================
+    //  ВЗАИМОДЕЙСТВИЕ
+    // ============================================================
+    let mouseDown = false;
+    let mouseX = -1, mouseY = -1;
+
+    function getGridCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        const canvasRatio = W / H;
+        const rectRatio = rect.width / rect.height;
+        let sx, sy, offsetX = 0, offsetY = 0;
+        if (rectRatio > canvasRatio) {
+            sy = H / rect.height; sx = sy;
+            offsetX = (rect.width - rect.height * canvasRatio) / 2;
+        } else {
+            sx = W / rect.width; sy = sx;
+            offsetY = (rect.height - rect.width / canvasRatio) / 2;
+        }
+        const x = Math.floor((e.clientX - rect.left - offsetX) * sx);
+        const y = Math.floor((e.clientY - rect.top - offsetY) * sy);
+        return { x: Math.max(0, Math.min(W - 1, x)), y: Math.max(0, Math.min(H - 1, y)) };
+    }
+
+    function paintAt(cx, cy, radius, mat, eraseMode = false) {
+        const r2 = radius * radius;
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                if (dx*dx + dy*dy > r2) continue;
+                const x = cx + dx, y = cy + dy;
+                if (!inBounds(x, y)) continue;
+                const i = idx(x, y);
+                if (eraseMode) { setCell(i, M.EMPTY, 0, 20); continue; }
+                if (grid[i] === M.WALL) continue;
+
+                // Если рисуем существо
+                if (isCreatureType(mat)) {
+                    const size = CREATURE_SIZE[mat];
+                    // Проверяем, что область свободна
+                    if (canPlaceCreature(cx - Math.floor(size.w/2), cy - Math.floor(size.h/2), size.w, size.h)) {
+                        spawnCreature(mat, cx - Math.floor(size.w/2), cy - Math.floor(size.h/2));
+                        return; // одно существо за клик
+                    }
+                } else {
+                    // Обычный материал
+                    setCell(i, mat, 0);
+                    if (mat === M.FIRE) life[i] = 30 + rndInt(30);
+                    if (mat === M.SMOKE) life[i] = 60 + rndInt(60);
+                    if (mat === M.STEAM) life[i] = 60 + rndInt(60);
+                }
+            }
+        }
+    }
+
+    function onPointerDown(e) {
+        e.preventDefault();
+        mouseDown = true;
+        const { x, y } = getGridCoords(e);
+        mouseX = x; mouseY = y;
+        paintAt(x, y, brushSize, currentMat, erasing);
+    }
+
+    function onPointerMove(e) {
+        if (!mouseDown) return;
+        e.preventDefault();
+        const { x, y } = getGridCoords(e);
+        if (x !== mouseX || y !== mouseY) {
+            const steps = Math.max(Math.abs(x - mouseX), Math.abs(y - mouseY));
+            for (let s = 1; s <= steps; s++) {
+                const t = s / steps;
+                const ix = Math.round(mouseX + (x - mouseX) * t);
+                const iy = Math.round(mouseY + (y - mouseY) * t);
+                paintAt(ix, iy, brushSize, currentMat, erasing);
+            }
+            mouseX = x; mouseY = y;
+        }
+    }
+
+    function onPointerUp() { mouseDown = false; }
+
+    // ============================================================
+    //  ТУЛБАР
+    // ============================================================
+    function buildToolbar() {
+        const tb = document.getElementById('toolbar');
+        tb.innerHTML = '';
+
+        const label = document.createElement('div');
+        label.className = 'section-label';
+        label.textContent = 'Вещества и существа';
+        tb.appendChild(label);
+
+        MAT_LIST.forEach(info => {
+            const btn = document.createElement('button');
+            btn.className = 'mat-btn' + (info.id === currentMat ? ' active' : '');
+            const col = C[info.id] || [255,0,255];
+            btn.innerHTML = `<span class="color-dot" style="background:rgb(${col[0]},${col[1]},${col[2]})"></span>${info.name}`;
+            btn.addEventListener('click', () => {
+                currentMat = info.id;
+                erasing = false;
+                document.querySelectorAll('.mat-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+            tb.appendChild(btn);
+        });
+
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex; gap:4px; flex-wrap:wrap; width:100%; margin-top:6px; align-items:center;';
+
+        const eraseBtn = document.createElement('button');
+        eraseBtn.className = 'action-btn'; eraseBtn.textContent = '🧽 Стереть';
+        eraseBtn.addEventListener('click', () => { erasing = true; document.querySelectorAll('.mat-btn').forEach(b => b.classList.remove('active')); });
+        actions.appendChild(eraseBtn);
+
+        const pauseBtn = document.createElement('button');
+        pauseBtn.className = 'action-btn'; pauseBtn.textContent = '⏸ Пауза';
+        pauseBtn.addEventListener('click', () => { paused = !paused; pauseBtn.textContent = paused ? '▶ Продолжить' : '⏸ Пауза'; });
+        actions.appendChild(pauseBtn);
+
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'action-btn danger'; clearBtn.textContent = '🗑 Очистить';
+        clearBtn.addEventListener('click', () => {
+            grid.fill(M.EMPTY); life.fill(0); temp.fill(20);
+            creatures.length = 0;
+            for (let x = 0; x < W; x++) { grid[(H-1) * W + x] = M.STONE; temp[(H-1) * W + x] = 20; }
+        });
+        actions.appendChild(clearBtn);
+
+        const bg = document.createElement('div');
+        bg.className = 'brush-group';
+        bg.innerHTML = `<label>Кисть</label>`;
+        const range = document.createElement('input');
+        range.type = 'range'; range.min = 1; range.max = 15; range.value = brushSize;
+        const val = document.createElement('span');
+        val.className = 'brush-value'; val.textContent = brushSize;
+        range.addEventListener('input', e => { brushSize = +e.target.value; val.textContent = brushSize; });
+        bg.appendChild(range); bg.appendChild(val);
+        actions.appendChild(bg);
+
+        tb.appendChild(actions);
+    }
+
+    // ============================================================
+    //  ИНИЦИАЛИЗАЦИЯ
+    // ============================================================
+    function initWorld() {
+        grid.fill(M.EMPTY); life.fill(0); temp.fill(20);
+        creatures.length = 0;
+
+        for (let x = 0; x < W; x++) { grid[(H-1) * W + x] = M.STONE; temp[(H-1) * W + x] = 20; }
+        for (let x = 0; x < W; x++) {
+            for (let y = H - 14; y < H - 1; y++) { if (rnd() < 0.6) grid[idx(x, y)] = M.SAND; }
+        }
+        // Озеро с водой (для водных существ)
+        for (let x = 10; x < 50; x++) {
+            for (let y = H - 20; y < H - 5; y++) {
+                if (rnd() < 0.9) grid[idx(x, y)] = M.WATER;
+            }
+        }
+        // Растения
+        for (let n = 0; n < 20; n++) {
+            const x = rndInt(W); const i = idx(x, H - 2);
+            if (grid[i] === M.EMPTY) grid[i] = M.PLANT;
+        }
+        // Наземные существа
+        for (let n = 0; n < 4; n++) {
+            const x = 50 + rndInt(W - 60), y = H - 8 - rndInt(3);
+            spawnCreature([M.HUMAN, M.DOG, M.CAT][n % 3], x, y);
+        }
+        // Динозавр
+        spawnCreature(M.DINO, W - 30, H - 8);
+        // Водные существа в озере
+        spawnCreature(M.OCTOPUS, 20, H - 15);
+        spawnCreature(M.STARFISH, 30, H - 10);
+        spawnCreature(M.SPONGE, 35, H - 12);
+    }
+
+    function loop() {
+        if (!paused) step();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    initWorld();
+    buildToolbar();
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointerleave', onPointerUp);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    loop();
+})();
+</script>
+</body>
+</html>
